@@ -1,0 +1,180 @@
+---
+title: "API Practice - YT"
+format: html
+---
+
+## Load packages
+
+```{r}
+library(httr2)
+library(jsonlite)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+```
+
+```{r}
+foodbank <- request("https://www.givefood.org.uk/api/2/foodbanks/")
+
+fb <- req_perform(foodbank)
+
+fb_data <- resp_body_string(fb) %>%
+  fromJSON()
+
+
+
+str(foodbank)
+
+str(fb$body)
+
+fromJSON(fb$body)
+```
+
+
+
+```{r}
+
+base_url <- "https://api.discogs.com"
+
+collection <- "/users/{username}/collection/folders/{folder_id}/releases"
+
+discog_request1 <- request("https://api.discogs.com/users/bsmith58/collection/folders/0/releases")
+
+dr1_out <- req_perform(discog_request1)
+
+dr1_data <- dr1_out %>%
+  resp_body_string() %>%
+  fromJSON() 
+
+test <- dr1_data$releases
+
+
+
+art_df <- data.frame()
+
+for(i in 1:50){
+  
+ art_str <-  test$basic_information.artists[[i]][1]
+ 
+ if(lengths(art_str) > 1){
+   
+  art_str <- as.character(art_str)
+   
+ }
+ 
+ art_df <- rbind(art_df, art_str)
+ 
+}
+
+cbind(test, art_df) %>%
+  View()
+
+```
+
+
+```{r}
+url <- "https://api.discogs.com/users/bsmith58/collection/folders/0/releases"
+
+discog_list <- list()
+
+for(i in 1:7){
+  
+  requrl <- paste0(url, "?page=", i, "&per_page=50")
+  
+  response <- request(requrl)
+  
+  response_out <- req_perform(response)
+
+  df_list <- response_out %>%
+  resp_body_string() %>%
+  fromJSON() 
+
+  discog_list[[i]] <- df_list$releases
+  
+}
+
+
+discogs_df <- bind_rows(discog_list)
+
+art_df <- data.frame()
+
+genre_df <- data.frame()
+
+format_df <- data.frame()
+
+id_df <- data.frame()
+
+title_df <- data.frame()
+
+year_df <- data.frame()
+master_id_df <- data.frame()
+
+for(i in 1:335){
+  
+ art_str <-  discogs_df$basic_information$artists[[i]][1]
+ 
+ format_str <- discogs_df$basic_information$formats[[i]][[1]][1]
+ 
+ id <- discogs_df$basic_information$id[[i]][1]
+ 
+ master_id <- discogs_df$basic_information$master_id[[i]]
+ 
+ title <- discogs_df$basic_information$title[[i]][1]
+ 
+ year <- discogs_df$basic_information$year[[i]][1]
+ 
+ genre <- discogs_df$basic_information$genres[[i]]
+ 
+ if(lengths(art_str) > 1){
+   
+  art_str <- as.character(art_str)
+
+ }
+ 
+ if(length(discogs_df$basic_information$genres[[i]]) > 1){
+   genre <- paste(genre, collapse = ',')
+ }
+ 
+ art_df <- rbind(art_df, art_str)
+ 
+ format_df <- rbind(format_df, format_str)
+ 
+ year_df <- rbind(year_df, year)
+ 
+ id_df <- rbind(id_df, id)
+ 
+ title_df <- rbind(title_df, title)
+ genre_df <- rbind(genre_df, genre)
+ master_id_df <- rbind(master_id_df, master_id)
+ 
+}
+
+clean_discogs <- cbind(id_df, master_id_df, title_df, art_df, year_df, format_df, genre_df)
+
+clean_discogs <- clean_discogs %>%
+  rename(id = X18771835L,
+         master_id = X1848252L,
+         album_name = X.Good.News.,
+         artist = name,
+         pressing_year = X2021L,
+         format = X.Vinyl.,
+         genre = X.Hip.Hop.)
+
+clean_discogs %>%
+  mutate(genre = strsplit(genre, ",")) %>%
+  unnest(genre) %>%
+  mutate(genre = gsub(" ", "", genre)) %>%
+  mutate(genre = case_when(genre == "&Country" ~ "Country",
+                   genre == "Stage&Screen" ~ "Stage & Screen",
+                   TRUE ~ genre)) %>%
+  count(genre) %>%
+  top_n(10) %>%
+  ggplot(aes(n, genre)) +
+  geom_bar(fill = "steelblue", stat = "identity")
+
+```
+
+
+
+
+
